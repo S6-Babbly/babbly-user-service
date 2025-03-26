@@ -9,4 +9,7 @@ services:
       - "5001:80"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Host=db;Database=babbly-users;Username=babbly_user;Password=babbly_password; 
+      - ConnectionStrings__DefaultConnection=Host=db;Database=babbly-users;Username=${POSTGRES_USER:-babbly_user};Password=${POSTGRES_PASSWORD:-babbly_password};
+    volumes:
+      - ./babbly-user-service/Migrations:/app/Migrations
+    restart: unless-stopped 
