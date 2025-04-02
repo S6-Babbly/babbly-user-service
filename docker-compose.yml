@@ -11,5 +11,27 @@ services:
       - ASPNETCORE_ENVIRONMENT=Development
       - ConnectionStrings__DefaultConnection=Host=db;Database=babbly-users;Username=${POSTGRES_USER:-babbly_user};Password=${POSTGRES_PASSWORD:-babbly_password};
     volumes:
-      - ./babbly-user-service/Migrations:/app/Migrations
-    restart: unless-stopped 
+      - ./Migrations:/app/Migrations
+    restart: unless-stopped
+    depends_on:
+      - db
+      
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=babbly-users
+      - POSTGRES_USER=${POSTGRES_USER:-babbly_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-babbly_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-babbly_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data: 
