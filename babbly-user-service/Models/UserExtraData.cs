@@ -3,29 +3,31 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace babbly_user_service.Models
 {
-    public class User
+    public class UserExtraData
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
         public int Id { get; set; }
 
         [Required]
-        public string Auth0Id { get; set; } = string.Empty;
+        public int UserId { get; set; }
 
-        [Required]
-        public string Username { get; set; } = string.Empty;
+        public string? DisplayName { get; set; }
 
-        [Required]
-        public string Email { get; set; } = string.Empty;
+        public string? ProfilePicture { get; set; }
 
-        [Required]
-        public string Role { get; set; } = "User"; // Default role
-
+        public string? Bio { get; set; }
+        
+        public string? Address { get; set; }
+        
+        public string? PhoneNumber { get; set; }
+        
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-        
+
         // Navigation property
-        public UserExtraData? ExtraData { get; set; }
+        [ForeignKey("UserId")]
+        public User User { get; set; } = null!;
     }
 } 

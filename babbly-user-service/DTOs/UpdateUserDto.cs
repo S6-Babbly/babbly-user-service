@@ -9,10 +9,8 @@ namespace babbly_user_service.DTOs
         [EmailAddress]
         public string? Email { get; set; }
 
-        public string? DisplayName { get; set; }
+        public string? Role { get; set; }
 
-        public string? ProfilePicture { get; set; }
-
-        public string? Bio { get; set; }
+        public UpdateUserExtraDataDto? ExtraData { get; set; }
     }
 } 

@@ -14,10 +14,8 @@ namespace babbly_user_service.DTOs
         [EmailAddress]
         public string Email { get; set; } = string.Empty;
 
-        public string? DisplayName { get; set; }
+        public string Role { get; set; } = "User"; // Default role
 
-        public string? ProfilePicture { get; set; }
-
-        public string? Bio { get; set; }
+        public CreateUserExtraDataDto? ExtraData { get; set; }
     }
 } 

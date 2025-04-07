@@ -23,7 +23,7 @@ namespace babbly_user_service.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<UserDto>>> GetUsers()
         {
-            var users = await _context.Users.ToListAsync();
+            var users = await _context.Users.Include(u => u.ExtraData).ToListAsync();
             return users.Select(u => MapUserToDto(u)).ToList();
         }
 
@@ -31,7 +31,7 @@ namespace babbly_user_service.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<UserDto>> GetUser(int id)
         {
-            var user = await _context.Users.FindAsync(id);
+            var user = await _context.Users.Include(u => u.ExtraData).FirstOrDefaultAsync(u => u.Id == id);
 
             if (user == null)
             {
@@ -45,7 +45,7 @@ namespace babbly_user_service.Controllers
         [HttpGet("auth0/{auth0Id}")]
         public async Task<ActionResult<UserDto>> GetUserByAuth0Id(string auth0Id)
         {
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.Auth0Id == auth0Id);
+            var user = await _context.Users.Include(u => u.ExtraData).FirstOrDefaultAsync(u => u.Auth0Id == auth0Id);
 
             if (user == null)
             {
@@ -82,15 +82,35 @@ namespace babbly_user_service.Controllers
                 Auth0Id = createUserDto.Auth0Id,
                 Username = createUserDto.Username,
                 Email = createUserDto.Email,
-                DisplayName = createUserDto.DisplayName,
-                ProfilePicture = createUserDto.ProfilePicture,
-                Bio = createUserDto.Bio,
+                Role = createUserDto.Role,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };
 
             _context.Users.Add(user);
             await _context.SaveChangesAsync();
+
+            // Create UserExtraData if provided
+            if (createUserDto.ExtraData != null)
+            {
+                var extraData = new UserExtraData
+                {
+                    UserId = user.Id,
+                    DisplayName = createUserDto.ExtraData.DisplayName,
+                    ProfilePicture = createUserDto.ExtraData.ProfilePicture,
+                    Bio = createUserDto.ExtraData.Bio,
+                    Address = createUserDto.ExtraData.Address,
+                    PhoneNumber = createUserDto.ExtraData.PhoneNumber,
+                    CreatedAt = DateTime.UtcNow,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.UserExtraData.Add(extraData);
+                await _context.SaveChangesAsync();
+                
+                // Reload user with extra data
+                user = await _context.Users.Include(u => u.ExtraData).FirstOrDefaultAsync(u => u.Id == user.Id);
+            }
 
             return CreatedAtAction(nameof(GetUser), new { id = user.Id }, MapUserToDto(user));
         }
@@ -99,7 +119,7 @@ namespace babbly_user_service.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateUser(int id, UpdateUserDto updateUserDto)
         {
-            var user = await _context.Users.FindAsync(id);
+            var user = await _context.Users.Include(u => u.ExtraData).FirstOrDefaultAsync(u => u.Id == id);
             if (user == null)
             {
                 return NotFound();
@@ -121,23 +141,51 @@ namespace babbly_user_service.Controllers
                 return Conflict("Email is already taken.");
             }
 
-            // Update only the provided fields
+            // Update user fields
             if (updateUserDto.Username != null)
                 user.Username = updateUserDto.Username;
             
             if (updateUserDto.Email != null)
                 user.Email = updateUserDto.Email;
             
-            if (updateUserDto.DisplayName != null)
-                user.DisplayName = updateUserDto.DisplayName;
-            
-            if (updateUserDto.ProfilePicture != null)
-                user.ProfilePicture = updateUserDto.ProfilePicture;
-            
-            if (updateUserDto.Bio != null)
-                user.Bio = updateUserDto.Bio;
+            if (updateUserDto.Role != null)
+                user.Role = updateUserDto.Role;
             
             user.UpdatedAt = DateTime.UtcNow;
+
+            // Update UserExtraData if provided
+            if (updateUserDto.ExtraData != null)
+            {
+                if (user.ExtraData == null)
+                {
+                    // Create extra data if it doesn't exist
+                    user.ExtraData = new UserExtraData
+                    {
+                        UserId = user.Id,
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    _context.UserExtraData.Add(user.ExtraData);
+                }
+
+                // Update extra data fields
+                if (updateUserDto.ExtraData.DisplayName != null)
+                    user.ExtraData.DisplayName = updateUserDto.ExtraData.DisplayName;
+                
+                if (updateUserDto.ExtraData.ProfilePicture != null)
+                    user.ExtraData.ProfilePicture = updateUserDto.ExtraData.ProfilePicture;
+                
+                if (updateUserDto.ExtraData.Bio != null)
+                    user.ExtraData.Bio = updateUserDto.ExtraData.Bio;
+                
+                if (updateUserDto.ExtraData.Address != null)
+                    user.ExtraData.Address = updateUserDto.ExtraData.Address;
+                
+                if (updateUserDto.ExtraData.PhoneNumber != null)
+                    user.ExtraData.PhoneNumber = updateUserDto.ExtraData.PhoneNumber;
+                
+                user.ExtraData.UpdatedAt = DateTime.UtcNow;
+            }
 
             try
             {
@@ -181,18 +229,34 @@ namespace babbly_user_service.Controllers
 
         private static UserDto MapUserToDto(User user)
         {
-            return new UserDto
+            var userDto = new UserDto
             {
                 Id = user.Id,
                 Auth0Id = user.Auth0Id,
                 Username = user.Username,
                 Email = user.Email,
-                DisplayName = user.DisplayName,
-                ProfilePicture = user.ProfilePicture,
-                Bio = user.Bio,
+                Role = user.Role,
                 CreatedAt = user.CreatedAt,
                 UpdatedAt = user.UpdatedAt
             };
+
+            if (user.ExtraData != null)
+            {
+                userDto.ExtraData = new UserExtraDataDto
+                {
+                    Id = user.ExtraData.Id,
+                    UserId = user.ExtraData.UserId,
+                    DisplayName = user.ExtraData.DisplayName,
+                    ProfilePicture = user.ExtraData.ProfilePicture,
+                    Bio = user.ExtraData.Bio,
+                    Address = user.ExtraData.Address,
+                    PhoneNumber = user.ExtraData.PhoneNumber,
+                    CreatedAt = user.ExtraData.CreatedAt,
+                    UpdatedAt = user.ExtraData.UpdatedAt
+                };
+            }
+
+            return userDto;
         }
     }
 } 

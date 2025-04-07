@@ -11,6 +11,7 @@ namespace babbly_user_service.Data
         }
 
         public DbSet<User> Users { get; set; }
+        public DbSet<UserExtraData> UserExtraData { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -37,16 +38,8 @@ namespace babbly_user_service.Data
                 .HasColumnName("email");
 
             modelBuilder.Entity<User>()
-                .Property(u => u.DisplayName)
-                .HasColumnName("display_name");
-
-            modelBuilder.Entity<User>()
-                .Property(u => u.ProfilePicture)
-                .HasColumnName("profile_picture");
-
-            modelBuilder.Entity<User>()
-                .Property(u => u.Bio)
-                .HasColumnName("bio");
+                .Property(u => u.Role)
+                .HasColumnName("role");
 
             modelBuilder.Entity<User>()
                 .Property(u => u.CreatedAt)
@@ -70,6 +63,53 @@ namespace babbly_user_service.Data
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Email)
                 .IsUnique();
+
+            // Configure the UserExtraData entity
+            modelBuilder.Entity<UserExtraData>()
+                .ToTable("user_extra_data");
+
+            modelBuilder.Entity<UserExtraData>()
+                .Property(u => u.Id)
+                .HasColumnName("id");
+
+            modelBuilder.Entity<UserExtraData>()
+                .Property(u => u.UserId)
+                .HasColumnName("user_id");
+
+            modelBuilder.Entity<UserExtraData>()
+                .Property(u => u.DisplayName)
+                .HasColumnName("display_name");
+
+            modelBuilder.Entity<UserExtraData>()
+                .Property(u => u.ProfilePicture)
+                .HasColumnName("profile_picture");
+
+            modelBuilder.Entity<UserExtraData>()
+                .Property(u => u.Bio)
+                .HasColumnName("bio");
+
+            modelBuilder.Entity<UserExtraData>()
+                .Property(u => u.Address)
+                .HasColumnName("address");
+
+            modelBuilder.Entity<UserExtraData>()
+                .Property(u => u.PhoneNumber)
+                .HasColumnName("phone_number");
+
+            modelBuilder.Entity<UserExtraData>()
+                .Property(u => u.CreatedAt)
+                .HasColumnName("created_at");
+
+            modelBuilder.Entity<UserExtraData>()
+                .Property(u => u.UpdatedAt)
+                .HasColumnName("updated_at");
+
+            // Configure one-to-one relationship
+            modelBuilder.Entity<User>()
+                .HasOne(u => u.ExtraData)
+                .WithOne(e => e.User)
+                .HasForeignKey<UserExtraData>(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 } 
