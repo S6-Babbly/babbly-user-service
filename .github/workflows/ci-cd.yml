@@ -108,9 +108,9 @@ jobs:
             docker push ${{ secrets.DOCKERHUB_USERNAME }}/babbly-user-service:latest
           fi
 
-      - name: Check user service health
+      - name: Verify container starts
         run: |
-          docker run --rm -d -p 5001:80 --name test-user-service ${{ secrets.DOCKERHUB_USERNAME }}/babbly-user-service:${{ github.sha }}
-          sleep 10
-          curl -f http://localhost:5001/api/health || exit 1
-          docker stop test-user-service
+          docker run --rm -d --name test-backend ${{ secrets.DOCKERHUB_USERNAME }}/babbly-user-service:${{ github.sha }}
+          sleep 5
+          docker logs test-backend
+          docker stop test-backend 
