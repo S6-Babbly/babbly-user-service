@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace babbly_user_service.Controllers
 {
     [ApiController]
-    [Route("api/[controller]")]
+    [Route("api/users")]
     public class UsersController : ControllerBase
     {
         private readonly ApplicationDbContext _context;

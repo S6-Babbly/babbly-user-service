@@ -8,7 +8,7 @@ using System.Threading;
 namespace babbly_user_service.Controllers
 {
     [ApiController]
-    [Route("[controller]")]
+    [Route("api/health")]
     public class HealthController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
@@ -23,7 +23,7 @@ namespace babbly_user_service.Controllers
         [HttpGet]
         public IActionResult Get()
         {
-            return Ok(new { status = "Healthy" });
+            return Ok(new { status = "Healthy", service = "babbly-user-service" });
         }
 
         [HttpGet("database")]

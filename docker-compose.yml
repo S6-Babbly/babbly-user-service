@@ -1,37 +1,68 @@
 version: '3.8'
 
 services:
+  postgres:
+    image: postgres:14
+    container_name: babbly-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: babbly_user_service
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - babbly-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.2
+    container_name: babbly-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - babbly-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.3.2
+    container_name: babbly-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - babbly-network
+
   user-service:
     build:
       context: .
-      dockerfile: Dockerfile
-    ports:
-      - "5001:8080"
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ConnectionStrings__DefaultConnection=Host=db;Database=babbly-users;Username=${POSTGRES_USER:-babbly_user};Password=${POSTGRES_PASSWORD:-babbly_password};
-    volumes:
-      - ./Migrations:/app/Migrations
-    restart: unless-stopped
+    container_name: babbly-user-service
     depends_on:
-      - db
-      
-  db:
-    image: postgres:16-alpine
-    ports:
-      - "5432:5432"
+      - postgres
+      - kafka
     environment:
-      - POSTGRES_DB=babbly-users
-      - POSTGRES_USER=${POSTGRES_USER:-babbly_user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-babbly_password}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./scripts/init:/docker-entrypoint-initdb.d
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-babbly_user}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      - ConnectionStrings__DefaultConnection=Host=postgres;Database=babbly_user_service;Username=postgres;Password=postgres
+      - ASPNETCORE_ENVIRONMENT=Development
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    ports:
+      - "5000:80"
+    networks:
+      - babbly-network
+
+networks:
+  babbly-network:
+    driver: bridge
 
 volumes:
-  postgres_data: 
+  postgres-data: 

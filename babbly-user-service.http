@@ -1,0 +1,65 @@
+@baseUrl = http://localhost:8081
+
+### Health checks
+# Basic health check
+GET {{baseUrl}}/health
+Accept: application/json
+
+### Check database health
+GET {{baseUrl}}/health/database
+Accept: application/json
+
+### Performance test
+GET {{baseUrl}}/health/performance?delayMs=100&cpuLoadMs=100
+Accept: application/json
+
+### User endpoints
+# Get all users
+GET {{baseUrl}}/api/users
+Accept: application/json
+
+### Get user by ID
+GET {{baseUrl}}/api/users/1
+Accept: application/json
+
+### Get user by Auth0 ID
+GET {{baseUrl}}/api/users/auth0/auth0|123456789
+Accept: application/json
+
+### Create a new user
+POST {{baseUrl}}/api/users
+Content-Type: application/json
+
+{
+  "auth0Id": "auth0|123456789",
+  "username": "johndoe",
+  "email": "john.doe@example.com",
+  "role": "User",
+  "extraData": {
+    "displayName": "John Doe",
+    "profilePicture": "https://example.com/profile.jpg",
+    "bio": "A short bio about John",
+    "address": "123 Main St, City",
+    "phoneNumber": "+1234567890"
+  }
+}
+
+### Update a user
+PUT {{baseUrl}}/api/users/1
+Content-Type: application/json
+
+{
+  "username": "johndoe_updated",
+  "email": "john.updated@example.com",
+  "role": "Moderator",
+  "extraData": {
+    "displayName": "John Doe Updated",
+    "bio": "Updated bio information",
+    "address": "456 New Address St, City",
+    "phoneNumber": "+9876543210"
+  }
+}
+
+### Delete a user
+DELETE {{baseUrl}}/api/users/1
+Accept: application/json 

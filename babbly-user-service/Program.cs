@@ -1,4 +1,5 @@
 using babbly_user_service.Data;
+using babbly_user_service.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +13,11 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     
     options.UseNpgsql(connectionString);
 });
+
+// Add Kafka services
+builder.Services.AddSingleton<KafkaProducerService>();
+builder.Services.AddHostedService<KafkaConsumerService>();
+builder.Services.AddScoped<AuthorizationService>();
 
 // Add CORS
 builder.Services.AddCors(options =>
