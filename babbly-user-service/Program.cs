@@ -14,11 +14,6 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString);
 });
 
-// Add Kafka services
-builder.Services.AddSingleton<KafkaProducerService>();
-builder.Services.AddHostedService<KafkaConsumerService>();
-builder.Services.AddScoped<AuthorizationService>();
-
 // Add CORS
 builder.Services.AddCors(options =>
 {
@@ -29,6 +24,11 @@ builder.Services.AddCors(options =>
               .AllowAnyMethod();
     });
 });
+
+// Register services
+builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<AuthorizationService>();
+builder.Services.AddHostedService<KafkaConsumerService>();
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle

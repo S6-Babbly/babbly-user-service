@@ -1,53 +1,53 @@
-using babbly_user_service.Models;
+using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using System.Collections.Generic;
 
 namespace babbly_user_service.Services
 {
     public class AuthorizationService
     {
-        private readonly KafkaProducerService _producerService;
-        private readonly KafkaConsumerService _consumerService;
         private readonly ILogger<AuthorizationService> _logger;
-        private readonly TimeSpan _defaultTimeout = TimeSpan.FromSeconds(10);
 
-        public AuthorizationService(
-            KafkaProducerService producerService,
-            KafkaConsumerService consumerService,
-            ILogger<AuthorizationService> logger)
+        public AuthorizationService(ILogger<AuthorizationService> logger)
         {
-            _producerService = producerService;
-            _consumerService = consumerService;
             _logger = logger;
         }
 
         /// <summary>
-        /// Check if a user is authorized to perform an operation on a resource
+        /// Checks if the user is authorized to perform the specified operation on the resource
         /// </summary>
+        /// <param name="userId">The user's ID</param>
+        /// <param name="roles">The user's roles</param>
+        /// <param name="resourcePath">The resource path being accessed</param>
+        /// <param name="operation">The operation being performed (read, write, delete)</param>
+        /// <returns>True if authorized, false otherwise</returns>
         public async Task<bool> IsAuthorizedAsync(string userId, List<string> roles, string resourcePath, string operation)
         {
-            try
-            {
-                _logger.LogInformation("Requesting authorization for user {userId} on resource {resourcePath} for operation {operation}",
-                    userId, resourcePath, operation);
+            // Log the authorization request
+            _logger.LogInformation(
+                "Authorization check for user {UserId} with roles [{Roles}] on resource {Resource} for operation {Operation}", 
+                userId, string.Join(", ", roles), resourcePath, operation);
 
-                // Send authorization request and get correlation ID
-                string correlationId = await _producerService.RequestAuthorizationAsync(userId, roles, resourcePath, operation);
-                
-                // Wait for response with timeout
-                var response = await _consumerService.WaitForAuthorizationResponseAsync(correlationId, _defaultTimeout);
+            // Admin roles have full access
+            if (roles.Contains("admin"))
+            {
+                return true;
+            }
 
-                _logger.LogInformation("Received authorization response: {isAuthorized}", response.IsAuthorized);
-                return response.IsAuthorized;
-            }
-            catch (TimeoutException ex)
+            // For user resources, users can access their own data
+            if (resourcePath.StartsWith("/api/users/") && resourcePath.Contains(userId))
             {
-                _logger.LogError(ex, "Authorization request timed out");
-                return false; // Fail closed - if authorization times out, deny access
+                return true;
             }
-            catch (Exception ex)
+
+            // Default role-based checks
+            return operation.ToLower() switch
             {
-                _logger.LogError(ex, "Error during authorization check");
-                return false; // Fail closed - if there's an error, deny access
-            }
+                "read" => roles.Contains("user") || roles.Contains("editor"),
+                "write" => roles.Contains("editor"),
+                "delete" => false, // Only admins can delete by default
+                _ => false
+            };
         }
     }
 } 

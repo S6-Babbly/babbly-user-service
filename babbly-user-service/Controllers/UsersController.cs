@@ -1,6 +1,7 @@
 using babbly_user_service.Data;
 using babbly_user_service.DTOs;
 using babbly_user_service.Models;
+using babbly_user_service.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,11 +12,16 @@ namespace babbly_user_service.Controllers
     public class UsersController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly UserService _userService;
         private readonly ILogger<UsersController> _logger;
 
-        public UsersController(ApplicationDbContext context, ILogger<UsersController> logger)
+        public UsersController(
+            ApplicationDbContext context,
+            UserService userService,
+            ILogger<UsersController> logger)
         {
             _context = context;
+            _userService = userService;
             _logger = logger;
         }
 
@@ -23,7 +29,7 @@ namespace babbly_user_service.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<UserDto>>> GetUsers()
         {
-            var users = await _context.Users.Include(u => u.ExtraData).ToListAsync();
+            var users = await _userService.GetAllUsersAsync();
             return users.Select(u => MapUserToDto(u)).ToList();
         }
 
@@ -31,7 +37,7 @@ namespace babbly_user_service.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<UserDto>> GetUser(int id)
         {
-            var user = await _context.Users.Include(u => u.ExtraData).FirstOrDefaultAsync(u => u.Id == id);
+            var user = await _userService.GetUserByIdAsync(id);
 
             if (user == null)
             {
@@ -45,7 +51,7 @@ namespace babbly_user_service.Controllers
         [HttpGet("auth0/{auth0Id}")]
         public async Task<ActionResult<UserDto>> GetUserByAuth0Id(string auth0Id)
         {
-            var user = await _context.Users.Include(u => u.ExtraData).FirstOrDefaultAsync(u => u.Auth0Id == auth0Id);
+            var user = await _userService.GetUserByAuth0IdAsync(auth0Id);
 
             if (user == null)
             {
@@ -87,15 +93,11 @@ namespace babbly_user_service.Controllers
                 UpdatedAt = DateTime.UtcNow
             };
 
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
-
             // Create UserExtraData if provided
             if (createUserDto.ExtraData != null)
             {
-                var extraData = new UserExtraData
+                user.ExtraData = new UserExtraData
                 {
-                    UserId = user.Id,
                     DisplayName = createUserDto.ExtraData.DisplayName,
                     ProfilePicture = createUserDto.ExtraData.ProfilePicture,
                     Bio = createUserDto.ExtraData.Bio,
@@ -104,13 +106,9 @@ namespace babbly_user_service.Controllers
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
                 };
-
-                _context.UserExtraData.Add(extraData);
-                await _context.SaveChangesAsync();
-                
-                // Reload user with extra data
-                user = await _context.Users.Include(u => u.ExtraData).FirstOrDefaultAsync(u => u.Id == user.Id);
             }
+
+            user = await _userService.CreateUserAsync(user);
 
             return CreatedAtAction(nameof(GetUser), new { id = user.Id }, MapUserToDto(user));
         }
@@ -119,7 +117,7 @@ namespace babbly_user_service.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> UpdateUser(int id, UpdateUserDto updateUserDto)
         {
-            var user = await _context.Users.Include(u => u.ExtraData).FirstOrDefaultAsync(u => u.Id == id);
+            var user = await _userService.GetUserByIdAsync(id);
             if (user == null)
             {
                 return NotFound();
@@ -151,8 +149,6 @@ namespace babbly_user_service.Controllers
             if (updateUserDto.Role != null)
                 user.Role = updateUserDto.Role;
             
-            user.UpdatedAt = DateTime.UtcNow;
-
             // Update UserExtraData if provided
             if (updateUserDto.ExtraData != null)
             {
@@ -161,11 +157,8 @@ namespace babbly_user_service.Controllers
                     // Create extra data if it doesn't exist
                     user.ExtraData = new UserExtraData
                     {
-                        UserId = user.Id,
                         CreatedAt = DateTime.UtcNow,
-                        UpdatedAt = DateTime.UtcNow
                     };
-                    _context.UserExtraData.Add(user.ExtraData);
                 }
 
                 // Update extra data fields
@@ -183,17 +176,15 @@ namespace babbly_user_service.Controllers
                 
                 if (updateUserDto.ExtraData.PhoneNumber != null)
                     user.ExtraData.PhoneNumber = updateUserDto.ExtraData.PhoneNumber;
-                
-                user.ExtraData.UpdatedAt = DateTime.UtcNow;
             }
 
             try
             {
-                await _context.SaveChangesAsync();
+                await _userService.UpdateUserAsync(user);
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!UserExists(id))
+                if (!await UserExistsAsync(id))
                 {
                     return NotFound();
                 }
@@ -210,21 +201,18 @@ namespace babbly_user_service.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> DeleteUser(int id)
         {
-            var user = await _context.Users.FindAsync(id);
-            if (user == null)
+            var result = await _userService.DeleteUserAsync(id);
+            if (!result)
             {
                 return NotFound();
             }
 
-            _context.Users.Remove(user);
-            await _context.SaveChangesAsync();
-
             return NoContent();
         }
 
-        private bool UserExists(int id)
+        private async Task<bool> UserExistsAsync(int id)
         {
-            return _context.Users.Any(e => e.Id == id);
+            return await _userService.GetUserByIdAsync(id) != null;
         }
 
         private static UserDto MapUserToDto(User user)
@@ -257,6 +245,135 @@ namespace babbly_user_service.Controllers
             }
 
             return userDto;
+        }
+
+        /// <summary>
+        /// Creates or updates a user profile based on Auth0 information
+        /// </summary>
+        [HttpPost("profile")]
+        [Produces("application/json")]
+        [ProducesResponseType(typeof(User), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> CreateOrUpdateFromAuth0([FromBody] Auth0UserProfile profile)
+        {
+            if (string.IsNullOrEmpty(profile.Auth0Id))
+            {
+                return BadRequest("Auth0Id is required");
+            }
+
+            // Get the user ID from the claims (passed by the gateway)
+            var userId = Request.Headers["X-User-Id"].FirstOrDefault();
+            
+            // Verify that the authenticated user is creating their own profile
+            if (string.IsNullOrEmpty(userId) || userId != profile.Auth0Id)
+            {
+                return Unauthorized("Cannot create or update another user's profile");
+            }
+            
+            // Get roles from the request headers
+            var roles = Request.Headers["X-User-Roles"].FirstOrDefault()?.Split(',') ?? Array.Empty<string>();
+            
+            try
+            {
+                // Check if user already exists
+                var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Auth0Id == profile.Auth0Id);
+                
+                if (existingUser != null)
+                {
+                    // Update user fields
+                    existingUser.Email = profile.Email;
+                    existingUser.Username = profile.Username ?? profile.Email.Split('@')[0];
+                    existingUser.FirstName = profile.FirstName ?? string.Empty;
+                    existingUser.LastName = profile.LastName ?? string.Empty;
+                    existingUser.UpdatedAt = DateTime.UtcNow;
+                    
+                    // If admin role is present in Auth0 claims, update it
+                    if (roles.Contains("admin"))
+                    {
+                        existingUser.Role = "Admin";
+                    }
+                    
+                    await _context.SaveChangesAsync();
+                    return Ok(existingUser);
+                }
+                else
+                {
+                    // Create new user
+                    var newUser = new User
+                    {
+                        Auth0Id = profile.Auth0Id,
+                        Email = profile.Email,
+                        Username = profile.Username ?? profile.Email.Split('@')[0],
+                        FirstName = profile.FirstName ?? string.Empty,
+                        LastName = profile.LastName ?? string.Empty,
+                        Role = roles.Contains("admin") ? "Admin" : "User",
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                    
+                    _context.Users.Add(newUser);
+                    await _context.SaveChangesAsync();
+                    
+                    return Ok(newUser);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error creating or updating user from Auth0");
+                return StatusCode(StatusCodes.Status500InternalServerError, "Error creating or updating user profile");
+            }
+        }
+
+        /// <summary>
+        /// Gets the current user's profile
+        /// </summary>
+        [HttpGet("me")]
+        [Produces("application/json")]
+        [ProducesResponseType(typeof(User), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> GetCurrentUser()
+        {
+            // Get the user ID from the claims (passed by the gateway)
+            var userId = Request.Headers["X-User-Id"].FirstOrDefault();
+            
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized("User is not authenticated");
+            }
+            
+            try
+            {
+                var user = await _context.Users
+                    .Include(u => u.ExtraData)
+                    .FirstOrDefaultAsync(u => u.Auth0Id == userId);
+                    
+                if (user == null)
+                {
+                    return NotFound("User not found");
+                }
+                
+                return Ok(user);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error retrieving current user");
+                return StatusCode(StatusCodes.Status500InternalServerError, "Error retrieving current user");
+            }
+        }
+
+        // GET: api/users/search?term={searchTerm}
+        [HttpGet("search")]
+        public async Task<ActionResult<IEnumerable<UserDto>>> SearchUsers([FromQuery] string term, [FromQuery] int skip = 0, [FromQuery] int take = 50)
+        {
+            if (string.IsNullOrWhiteSpace(term))
+            {
+                return await GetUsers();
+            }
+
+            var users = await _userService.SearchUsersAsync(term, skip, take);
+            return users.Select(u => MapUserToDto(u)).ToList();
         }
     }
 } 
