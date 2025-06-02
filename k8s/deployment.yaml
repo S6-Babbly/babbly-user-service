@@ -25,7 +25,7 @@ spec:
         ']
       containers:
       - name: user-service
-        image: babbly-user-service:latest
+        image: morrishh/babbly-user-service:latest
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
