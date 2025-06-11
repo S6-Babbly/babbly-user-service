@@ -13,15 +13,18 @@ namespace babbly_user_service.Controllers
     {
         private readonly ApplicationDbContext _context;
         private readonly UserService _userService;
+        private readonly KafkaProducerService _kafkaProducer;
         private readonly ILogger<UsersController> _logger;
 
         public UsersController(
             ApplicationDbContext context,
             UserService userService,
+            KafkaProducerService kafkaProducer,
             ILogger<UsersController> logger)
         {
             _context = context;
             _userService = userService;
+            _kafkaProducer = kafkaProducer;
             _logger = logger;
         }
 
@@ -259,7 +262,12 @@ namespace babbly_user_service.Controllers
         {
             if (string.IsNullOrEmpty(profile.Auth0Id))
             {
-                return BadRequest("Auth0Id is required");
+                return BadRequest(new { error = "Auth0Id is required" });
+            }
+
+            if (string.IsNullOrEmpty(profile.Email))
+            {
+                return BadRequest(new { error = "Email is required" });
             }
 
             // Get the user ID from the claims (passed by the gateway)
@@ -268,7 +276,7 @@ namespace babbly_user_service.Controllers
             // Verify that the authenticated user is creating their own profile
             if (string.IsNullOrEmpty(userId) || userId != profile.Auth0Id)
             {
-                return Unauthorized("Cannot create or update another user's profile");
+                return Unauthorized(new { error = "Cannot create or update another user's profile" });
             }
             
             // Get roles from the request headers
@@ -277,10 +285,14 @@ namespace babbly_user_service.Controllers
             try
             {
                 // Check if user already exists
-                var existingUser = await _context.Users.FirstOrDefaultAsync(u => u.Auth0Id == profile.Auth0Id);
+                var existingUser = await _context.Users
+                    .Include(u => u.ExtraData)
+                    .FirstOrDefaultAsync(u => u.Auth0Id == profile.Auth0Id);
                 
                 if (existingUser != null)
                 {
+                    _logger.LogInformation("Updating existing user: {Auth0Id}", profile.Auth0Id);
+                    
                     // Update user fields
                     existingUser.Email = profile.Email;
                     existingUser.Username = profile.Username ?? profile.Email.Split('@')[0];
@@ -288,17 +300,44 @@ namespace babbly_user_service.Controllers
                     existingUser.LastName = profile.LastName ?? string.Empty;
                     existingUser.UpdatedAt = DateTime.UtcNow;
                     
-                    // If admin role is present in Auth0 claims, update it
-                    if (roles.Contains("admin"))
+                    // Update or create extra data
+                    if (existingUser.ExtraData == null && !string.IsNullOrEmpty(profile.Picture))
+                    {
+                        existingUser.ExtraData = new UserExtraData
+                        {
+                            DisplayName = profile.FullName ?? profile.FirstName ?? string.Empty,
+                            ProfilePicture = profile.Picture,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+                    }
+                    else if (existingUser.ExtraData != null)
+                    {
+                        if (!string.IsNullOrEmpty(profile.FullName))
+                            existingUser.ExtraData.DisplayName = profile.FullName;
+                        if (!string.IsNullOrEmpty(profile.Picture))
+                            existingUser.ExtraData.ProfilePicture = profile.Picture;
+                        existingUser.ExtraData.UpdatedAt = DateTime.UtcNow;
+                    }
+                    
+                    // Update role if admin role is present in Auth0 claims
+                    if (roles.Contains("admin") && existingUser.Role != "Admin")
                     {
                         existingUser.Role = "Admin";
                     }
                     
                     await _context.SaveChangesAsync();
+                    
+                    // Publish user updated event to Kafka
+                    await _kafkaProducer.PublishUserUpdatedEventAsync(existingUser);
+                    
+                    _logger.LogInformation("Successfully updated user: {UserId}, {Auth0Id}", existingUser.Id, existingUser.Auth0Id);
                     return Ok(existingUser);
                 }
                 else
                 {
+                    _logger.LogInformation("Creating new user: {Auth0Id}", profile.Auth0Id);
+                    
                     // Create new user
                     var newUser = new User
                     {
@@ -312,16 +351,33 @@ namespace babbly_user_service.Controllers
                         UpdatedAt = DateTime.UtcNow
                     };
                     
+                    // Create extra data if we have picture or display name
+                    if (!string.IsNullOrEmpty(profile.Picture) || !string.IsNullOrEmpty(profile.FullName))
+                    {
+                        newUser.ExtraData = new UserExtraData
+                        {
+                            DisplayName = profile.FullName ?? profile.FirstName ?? string.Empty,
+                            ProfilePicture = profile.Picture ?? string.Empty,
+                            CreatedAt = DateTime.UtcNow,
+                            UpdatedAt = DateTime.UtcNow
+                        };
+                    }
+                    
                     _context.Users.Add(newUser);
                     await _context.SaveChangesAsync();
                     
+                    // Publish user created event to Kafka
+                    await _kafkaProducer.PublishUserCreatedEventAsync(newUser);
+                    
+                    _logger.LogInformation("Successfully created new user: {UserId}, {Auth0Id}", newUser.Id, newUser.Auth0Id);
                     return Ok(newUser);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error creating or updating user from Auth0");
-                return StatusCode(StatusCodes.Status500InternalServerError, "Error creating or updating user profile");
+                _logger.LogError(ex, "Error creating or updating user from Auth0: {Auth0Id}", profile.Auth0Id);
+                return StatusCode(StatusCodes.Status500InternalServerError, 
+                    new { error = "Error creating or updating user profile" });
             }
         }
 

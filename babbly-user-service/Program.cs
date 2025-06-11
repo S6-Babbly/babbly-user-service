@@ -28,6 +28,7 @@ builder.Services.AddCors(options =>
 // Register services
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<AuthorizationService>();
+builder.Services.AddSingleton<KafkaProducerService>();
 builder.Services.AddHostedService<KafkaConsumerService>();
 
 builder.Services.AddControllers();

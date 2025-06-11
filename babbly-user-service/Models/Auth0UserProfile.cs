@@ -4,7 +4,7 @@ namespace babbly_user_service.Models
 {
     public class Auth0UserProfile
     {
-        [JsonPropertyName("sub")]
+        [JsonPropertyName("auth0Id")]
         public string Auth0Id { get; set; } = string.Empty;
         
         [JsonPropertyName("email")]
@@ -13,22 +13,22 @@ namespace babbly_user_service.Models
         [JsonPropertyName("username")]
         public string? Username { get; set; }
         
-        [JsonPropertyName("given_name")]
+        [JsonPropertyName("firstName")]
         public string? FirstName { get; set; }
         
-        [JsonPropertyName("family_name")]
+        [JsonPropertyName("lastName")]
         public string? LastName { get; set; }
         
-        [JsonPropertyName("name")]
+        [JsonPropertyName("fullName")]
         public string? FullName { get; set; }
         
         [JsonPropertyName("picture")]
         public string? Picture { get; set; }
         
-        [JsonPropertyName("email_verified")]
+        [JsonPropertyName("emailVerified")]
         public bool EmailVerified { get; set; }
         
-        [JsonPropertyName("updated_at")]
+        [JsonPropertyName("updatedAt")]
         public DateTime? UpdatedAt { get; set; }
     }
 } 
