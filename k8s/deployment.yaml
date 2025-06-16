@@ -14,27 +14,34 @@ spec:
       labels:
         app: user-service
     spec:
-      initContainers:
-      - name: check-db-ready
-        image: busybox:1.36
-        command: ['sh', '-c', '
-          until nslookup user-db; do 
-            echo "waiting for user-db DNS resolution..."; 
-            sleep 2; 
-          done;
-        ']
       containers:
       - name: user-service
         image: morrishh/babbly-user-service:latest
         imagePullPolicy: IfNotPresent
         ports:
-        - containerPort: 8080
+        - containerPort: 8081
         env:
         - name: ASPNETCORE_ENVIRONMENT
           value: "Development"
-        - name: ConnectionStrings__UserDb
-          value: "Host=user-db;Port=5432;Database=babbly-users;Username=babbly_user;Password=babbly_password"
-        - name: KAFKA_BOOTSTRAP_SERVERS
+        # Database Connection (Neon Cloud) - .NET Configuration Binding
+        - name: ConnectionStrings__DefaultConnection
+          valueFrom:
+            secretKeyRef:
+              name: user-service-secrets
+              key: connection-string
+        # Kafka Configuration - .NET Configuration Binding
+        - name: Kafka__BootstrapServers
           value: "kafka:9092"
-        - name: KAFKA_USER_TOPIC
-          value: "user-events" 
+        - name: Kafka__UserTopic
+          value: "user-events"
+        # CORS Configuration - .NET Configuration Binding
+        - name: CorsOrigins__0
+          value: "http://frontend:3000"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: user-service-secrets
+type: Opaque
+stringData:
+  connection-string: "Host=ep-small-night-a9849te7-pooler.gwc.azure.neon.tech;Database=neondb;Username=neondb_owner;Password=npg_o31NvxnlPqTL;SSL Mode=Require;Trust Server Certificate=true"

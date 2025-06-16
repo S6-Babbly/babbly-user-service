@@ -55,7 +55,8 @@ namespace babbly_user_service.Services
                 {
                     try
                     {
-                        var consumeResult = _consumer.Consume(stoppingToken);
+                        // Use a timeout to prevent blocking indefinitely
+                        var consumeResult = _consumer.Consume(TimeSpan.FromMilliseconds(1000));
 
                         if (consumeResult != null)
                         {
@@ -67,10 +68,20 @@ namespace babbly_user_service.Services
                             _consumer.Commit(consumeResult);
                             _consumer.StoreOffset(consumeResult);
                         }
+                        
+                        // Add a small delay to prevent busy waiting
+                        await Task.Delay(100, stoppingToken);
                     }
                     catch (ConsumeException ex)
                     {
                         _logger.LogError(ex, "Error consuming message from Kafka");
+                        // Add delay before retrying
+                        await Task.Delay(1000, stoppingToken);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Expected when cancellation is requested
+                        break;
                     }
                 }
             }

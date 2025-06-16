@@ -11,6 +11,11 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     var connectionString = Environment.GetEnvironmentVariable("ConnectionStrings__DefaultConnection") ?? 
                           builder.Configuration.GetConnectionString("DefaultConnection");
     
+    if (string.IsNullOrEmpty(connectionString))
+    {
+        throw new InvalidOperationException("Database connection string is not configured. Please set ConnectionStrings__DefaultConnection environment variable or configure it in appsettings.json");
+    }
+    
     options.UseNpgsql(connectionString);
 });
 
@@ -19,7 +24,19 @@ builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins(builder.Configuration.GetSection("CorsOrigins").Get<string[]>() ?? new[] { "http://localhost:3000" })
+        // Get CORS origins from configuration (supports environment variables)
+        var corsOrigins = builder.Configuration.GetSection("CorsOrigins").Get<string[]>() ?? 
+                         new[] { builder.Configuration["CorsOrigins:0"] ?? "http://localhost:3000" };
+        
+        // Filter out null or empty values
+        corsOrigins = corsOrigins.Where(origin => !string.IsNullOrWhiteSpace(origin)).ToArray();
+        
+        if (corsOrigins.Length == 0)
+        {
+            corsOrigins = new[] { "http://localhost:3000" };
+        }
+        
+        policy.WithOrigins(corsOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
@@ -54,13 +71,27 @@ app.UseAuthorization();
 
 app.MapControllers();
 
-// Apply migrations automatically when in development
-if (app.Environment.IsDevelopment())
+// Apply migrations automatically - only in development or when explicitly enabled
+if (app.Environment.IsDevelopment() || 
+    Environment.GetEnvironmentVariable("ENABLE_AUTO_MIGRATION")?.ToLower() == "true")
 {
-    using (var scope = app.Services.CreateScope())
+    try
     {
-        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-        db.Database.Migrate();
+        using (var scope = app.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+            db.Database.Migrate();
+        }
+    }
+    catch (Exception ex)
+    {
+        var logger = app.Services.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "An error occurred while migrating the database");
+        
+        if (app.Environment.IsProduction())
+        {
+            throw; // Re-throw in production to prevent startup with database issues
+        }
     }
 }
 

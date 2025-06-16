@@ -28,7 +28,7 @@ namespace babbly_user_service.Services
             {
                 BootstrapServers = bootstrapServers,
                 ClientId = "babbly-user-service",
-                Acks = Acks.Leader, // Wait for the leader to acknowledge the message
+                Acks = Acks.All, // Required when EnableIdempotence is true
                 MessageSendMaxRetries = 3,
                 RetryBackoffMs = 1000, // 1 second backoff between retries
                 EnableIdempotence = true // Ensure messages are not duplicated
