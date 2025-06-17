@@ -16,7 +16,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
         throw new InvalidOperationException("Database connection string is not configured. Please set ConnectionStrings__DefaultConnection environment variable or configure it in appsettings.json");
     }
     
-    options.UseNpgsql(connectionString);
+    options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention();
 });
 
 // Add CORS

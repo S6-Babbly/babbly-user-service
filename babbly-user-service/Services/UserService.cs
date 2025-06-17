@@ -152,8 +152,9 @@ namespace babbly_user_service.Services
                     .Where(u => 
                         u.Email.ToLower().Contains(normalizedSearchTerm) ||
                         u.Username.ToLower().Contains(normalizedSearchTerm) ||
-                        u.FirstName.ToLower().Contains(normalizedSearchTerm) ||
-                        u.LastName.ToLower().Contains(normalizedSearchTerm) ||
+                        // Removed FirstName and LastName - these columns don't exist in database
+                        // u.FirstName.ToLower().Contains(normalizedSearchTerm) ||
+                        // u.LastName.ToLower().Contains(normalizedSearchTerm) ||
                         (u.ExtraData != null && u.ExtraData.DisplayName != null && 
                          u.ExtraData.DisplayName.ToLower().Contains(normalizedSearchTerm))
                     )

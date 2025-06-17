@@ -27,9 +27,11 @@ namespace babbly_user_service.Models
         [JsonPropertyName("role")]
         public string Role { get; set; } = "User";
         
+        [NotMapped]
         [JsonPropertyName("first_name")]
         public string FirstName { get; set; } = string.Empty;
         
+        [NotMapped]
         [JsonPropertyName("last_name")]
         public string LastName { get; set; } = string.Empty;
         

@@ -36,7 +36,10 @@ spec:
           value: "user-events"
         # CORS Configuration - .NET Configuration Binding
         - name: CorsOrigins__0
-          value: "http://frontend:3000"
+          valueFrom:
+            configMapKeyRef:
+              name: babbly-external-config
+              key: FRONTEND_EXTERNAL_URL
 ---
 apiVersion: v1
 kind: Secret
