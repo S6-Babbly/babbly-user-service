@@ -419,6 +419,100 @@ namespace babbly_user_service.Controllers
             }
         }
 
+        /// <summary>
+        /// Updates the current user's profile
+        /// </summary>
+        [HttpPut("profile")]
+        [Produces("application/json")]
+        [ProducesResponseType(typeof(UserDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        public async Task<IActionResult> UpdateUserProfile([FromBody] UpdateUserProfileDto profileDto)
+        {
+            // Get the user ID from the claims (passed by the gateway)
+            var userId = Request.Headers["X-User-Id"].FirstOrDefault();
+            
+            if (string.IsNullOrEmpty(userId))
+            {
+                return Unauthorized(new { error = "Authentication required. User ID not found in token." });
+            }
+            
+            try
+            {
+                var user = await _context.Users
+                    .Include(u => u.ExtraData)
+                    .FirstOrDefaultAsync(u => u.Auth0Id == userId);
+                    
+                if (user == null)
+                {
+                    return NotFound(new { error = "User not found" });
+                }
+                
+                // Update basic user fields
+                if (!string.IsNullOrEmpty(profileDto.Username))
+                {
+                    // Check if username is already taken by another user
+                    var existingUser = await _context.Users
+                        .FirstOrDefaultAsync(u => u.Username == profileDto.Username && u.Auth0Id != userId);
+                    if (existingUser != null)
+                    {
+                        return BadRequest(new { error = "Username is already taken" });
+                    }
+                    user.Username = profileDto.Username;
+                }
+                
+                if (!string.IsNullOrEmpty(profileDto.Email))
+                {
+                    user.Email = profileDto.Email;
+                }
+                
+                // Update or create extra data
+                if (user.ExtraData == null)
+                {
+                    user.ExtraData = new UserExtraData
+                    {
+                        CreatedAt = DateTime.UtcNow,
+                        UpdatedAt = DateTime.UtcNow
+                    };
+                }
+                
+                if (!string.IsNullOrEmpty(profileDto.DisplayName))
+                {
+                    user.ExtraData.DisplayName = profileDto.DisplayName;
+                }
+                
+                if (!string.IsNullOrEmpty(profileDto.ProfilePicture))
+                {
+                    user.ExtraData.ProfilePicture = profileDto.ProfilePicture;
+                }
+                
+                if (!string.IsNullOrEmpty(profileDto.Address))
+                {
+                    user.ExtraData.Address = profileDto.Address;
+                }
+                
+                if (!string.IsNullOrEmpty(profileDto.PhoneNumber))
+                {
+                    user.ExtraData.PhoneNumber = profileDto.PhoneNumber;
+                }
+                
+                user.UpdatedAt = DateTime.UtcNow;
+                user.ExtraData.UpdatedAt = DateTime.UtcNow;
+                
+                await _context.SaveChangesAsync();
+                
+                _logger.LogInformation("Updated profile for user {UserId}", userId);
+                
+                return Ok(MapUserToDto(user));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error updating profile for user {UserId}", userId);
+                return StatusCode(StatusCodes.Status500InternalServerError, 
+                    new { error = "Error updating user profile" });
+            }
+        }
+
         // GET: api/users/search?term={searchTerm}
         [HttpGet("search")]
         public async Task<ActionResult<IEnumerable<UserDto>>> SearchUsers([FromQuery] string term, [FromQuery] int skip = 0, [FromQuery] int take = 50)
