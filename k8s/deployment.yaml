@@ -23,6 +23,8 @@ spec:
         env:
         - name: ASPNETCORE_ENVIRONMENT
           value: "Development"
+        - name: ASPNETCORE_URLS
+          value: "http://+:8081"
         # Database Connection (Neon Cloud) - .NET Configuration Binding
         - name: ConnectionStrings__DefaultConnection
           valueFrom:

@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json.Serialization;
 
 namespace babbly_user_service.Models
 {
@@ -26,8 +27,9 @@ namespace babbly_user_service.Models
 
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
-        // Navigation property
+        // Navigation property - JsonIgnore to prevent circular reference
         [ForeignKey("UserId")]
+        [JsonIgnore]
         public User User { get; set; } = null!;
     }
 } 
