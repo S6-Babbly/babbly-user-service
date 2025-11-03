@@ -49,4 +49,4 @@ metadata:
   name: user-service-secrets
 type: Opaque
 stringData:
-  connection-string: "Host=ep-small-night-a9849te7-pooler.gwc.azure.neon.tech;Database=neondb;Username=neondb_owner;Password=npg_o31NvxnlPqTL;SSL Mode=Require;Trust Server Certificate=true"
+  connection-string: "Host=your-db-host;Database=your-database;Username=your-username;Password=your-password;SSL Mode=Require;Trust Server Certificate=true"

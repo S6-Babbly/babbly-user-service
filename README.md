@@ -1,180 +1,151 @@
 # Babbly User Service
 
-## Overview
+The user management microservice for the Babbly platform, handling user profiles, registration, and consuming authentication events from Kafka.
 
-Babbly User Service is a microservice within the Babbly application ecosystem responsible for handling user management, authentication, and profile data. It's built with .NET 9 API and uses Entity Framework Core as the ORM (Object-Relational Mapper) with a PostgreSQL database backend. It integrates with Kafka for event-driven communication with other services.
+## Tech Stack
+
+- **Backend**: ASP.NET Core 9.0
+- **ORM**: Entity Framework Core
+- **Database**: PostgreSQL
+- **Message Broker**: Kafka (Confluent.Kafka client)
+- **Authentication**: Auth0 integration
 
 ## Features
 
-- RESTful API endpoints for user management
-- User registration and profile management
-- Authentication and authorization via Auth0
-- Kafka integration for consuming user events from the Auth Service
+- User profile management (CRUD operations)
+- User search functionality
+- Kafka event consumption from Auth Service
 - Service-to-service communication
+- User data persistence in PostgreSQL
 
-## Technology Stack
-
-- **.NET 9 API**: Latest version of the .NET platform
-- **Entity Framework Core**: ORM for database access
-- **PostgreSQL**: Relational database for data storage
-- **Confluent.Kafka**: Kafka client for .NET
-- **Docker**: Containerization for easy deployment
-
-## Getting Started
+## Local Development Setup
 
 ### Prerequisites
 
 - .NET SDK 9.0 or later
-- PostgreSQL
-- Kafka (for local development, you can use Docker)
-- Docker and Docker Compose (for containerized deployment)
+- PostgreSQL 14+
+- Apache Kafka (or Docker Compose)
 
 ### Installation
 
 1. Clone the repository:
-
-```bash
-git clone https://github.com/yourusername/babbly-user-service.git
-cd babbly-user-service
-```
+   ```bash
+   git clone https://github.com/yourusername/babbly-user-service.git
+   cd babbly-user-service
+   ```
 
 2. Restore dependencies:
+   ```bash
+   dotnet restore
+   ```
 
-```bash
-dotnet restore
-```
+3. Configure the database connection and Kafka:
+   ```bash
+   # Using user secrets for development
+   dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=babbly-users;Username=postgres;Password=your_password"
+   dotnet user-secrets set "Kafka:BootstrapServers" "localhost:9092"
+   dotnet user-secrets set "Kafka:UserTopic" "user-events"
+   ```
 
-3. Set up the database connection string and Kafka configuration in your environment variables or user secrets:
+4. Run database migrations:
+   ```bash
+   dotnet ef database update --project babbly-user-service
+   ```
 
-```bash
-# For development, you can use user secrets
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=babbly-users;Username=your_username;Password=your_password;"
-dotnet user-secrets set "Kafka:BootstrapServers" "localhost:9092"
-dotnet user-secrets set "Kafka:UserTopic" "user-events"
-```
+5. Run the service:
+   ```bash
+   dotnet run --project babbly-user-service/babbly-user-service.csproj
+   ```
 
-4. Run the application:
+The API will be available at `http://localhost:8081`.
 
-```bash
-dotnet run --project babbly-user-service/babbly-user-service.csproj
-```
+## Environment Variables
 
-5. The API will be available at [http://localhost:5001](http://localhost:5001).
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `ConnectionStrings__DefaultConnection` | PostgreSQL connection string | - |
+| `KAFKA_BOOTSTRAP_SERVERS` | Kafka broker addresses | `localhost:9092` |
+| `KAFKA_USER_TOPIC` | Kafka topic for user events | `user-events` |
 
 ## API Endpoints
 
+### User Management
 - `GET /api/users` - Get all users
-- `GET /api/users/{id}` - Get a specific user
-- `GET /api/users/auth0/{auth0Id}` - Get a user by Auth0 ID
+- `GET /api/users/{id}` - Get user by ID
+- `GET /api/users/auth0/{auth0Id}` - Get user by Auth0 ID
 - `GET /api/users/search?term={searchTerm}` - Search users
 - `POST /api/users` - Create a new user
-- `POST /api/users/profile` - Create or update user from Auth0 profile
 - `PUT /api/users/{id}` - Update a user
 - `DELETE /api/users/{id}` - Delete a user
-- `GET /api/users/me` - Get current user
-- `GET /api/health` - Health check endpoint
+- `GET /api/users/me` - Get current authenticated user
 
-## Kafka Integration
+### Profile Management
+- `POST /api/users/profile` - Create or update user profile from Auth0 data
 
-The User Service consumes events from the Auth Service via Kafka:
-
-### Event Types
-
-- **UserCreated**: When a new user is registered through Auth0
-- **UserUpdated**: When a user's profile is updated
-
-### Kafka Topics
-
-- `user-events`: Topic for user-related events
+### Health Check
+- `GET /api/health` - Service health check
 
 ## Database Schema
 
 ### Users Table
-
-```
-- id (PK)
-- auth0_id (unique)
-- username (unique)
-- email (unique)
-- role
-- first_name
-- last_name
-- created_at
-- updated_at
-```
+- `id` (PK) - Integer primary key
+- `auth0_id` - Unique Auth0 identifier
+- `username` - Unique username
+- `email` - Unique email address
+- `role` - User role (user, admin, etc.)
+- `first_name` - User's first name
+- `last_name` - User's last name
+- `created_at` - Account creation timestamp
+- `updated_at` - Last update timestamp
 
 ### User Extra Data Table
+- `id` (PK) - Integer primary key
+- `user_id` (FK) - Foreign key to Users table
+- `display_name` - Display name for UI
+- `profile_picture` - URL to profile picture
+- `bio` - User biography
+- `address` - Physical address
+- `phone_number` - Contact phone number
+- `created_at` - Record creation timestamp
+- `updated_at` - Last update timestamp
 
-```
-- id (PK)
-- user_id (FK)
-- display_name
-- profile_picture
-- bio
-- address
-- phone_number
-- created_at
-- updated_at
-```
+## Docker Support
 
-## Running with Docker
-
-The Babbly User Service can be easily run using Docker and Docker Compose:
-
-### Using Docker Compose
-
-1. Ensure Docker and Docker Compose are installed on your system.
-
-2. Clone the repository and navigate to the project directory.
-
-3. Run the application using Docker Compose:
+Run the service with Docker Compose:
 
 ```bash
-docker-compose up
+# From the root of the Babbly organization
+docker-compose up -d user-service
 ```
 
-This will start the user service, a PostgreSQL database container, and Kafka. The user service will be available at http://localhost:5001.
-
-### Configuration
-
-The Docker Compose configuration includes:
-
-- A PostgreSQL database with persistence
-- Kafka and Zookeeper for event messaging
-- Automatic database migrations
-- Environment variable configuration for development
-
-### Environment Variables
-
-You can customize the deployment by setting environment variables:
+Or run with its own Docker Compose (includes PostgreSQL and Kafka):
 
 ```bash
-# Database configuration
-ConnectionStrings__DefaultConnection=Host=postgres;Database=babbly_user_service;Username=postgres;Password=postgres
-
-# Kafka configuration
-KAFKA_BOOTSTRAP_SERVERS=kafka:9092
-KAFKA_USER_TOPIC=user-events
+# From the babbly-user-service directory
+docker-compose up -d
 ```
 
-## Testing
+The service will be available at `http://localhost:8081`.
 
-```bash
-# Run tests
-dotnet test
+## Architecture Notes
 
-# Run tests with coverage
-dotnet test --collect:"XPlat Code Coverage"
-```
+### Kafka Integration
 
-## CI/CD Pipeline
+The User Service consumes events from the Auth Service via Kafka:
 
-This repository uses GitHub Actions for continuous integration and deployment:
+**Event Types:**
+- `UserCreated` - When a new user registers through Auth0
+- `UserUpdated` - When a user's profile information is updated
 
-- **Code Quality**: SonarCloud analysis
-- **Tests**: Unit and integration tests
-- **Docker Build**: Builds and validates Docker image
-- **Deployment**: Automated deployment to staging/production environments
+**Topic:** `user-events`
+
+The service automatically creates or updates user records based on these events, ensuring user data is synchronized across the system.
+
+### Integration with Babbly Ecosystem
+
+- **Auth Service**: Publishes user authentication events that this service consumes
+- **API Gateway**: Routes user-related requests to this service
+- **Other Services**: Query this service for user information via the API Gateway
 
 ## License
 
